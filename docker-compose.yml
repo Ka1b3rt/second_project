@@ -1,0 +1,35 @@
+version: '3.8'
+services:
+  app:
+    build: .
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+      - redis
+      - rabbitmq
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://user:password@db:5432/delivery
+      - REDIS_URL=redis://redis:6379/0
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+  db:
+    image: postgres:15
+    environment:
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=delivery
+  redis:
+    image: redis:7
+  rabbitmq:
+    image: rabbitmq:3-management
+  worker:
+    build: .
+    command: poetry run python app/worker/consumer.py
+    depends_on:
+      - db
+      - rabbitmq
+  celery:
+    build: .
+    command: poetry run celery -A app.tasks.celery_app worker --loglevel=info
+    depends_on:
+      - redis
