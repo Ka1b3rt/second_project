@@ -1,0 +1,119 @@
+services:
+  api:
+    image: delivery-api
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+    container_name: ${PROJECT_NAME}-api
+    restart: always
+    ports:
+      - ${API_PORT}:${API_PORT}
+    env_file:
+      - .env
+    volumes:
+      - ./src:/app/src
+      - ./pyproject.toml:/app/pyproject.toml
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrator:
+        condition: service_completed_successfully
+    command: >
+      bash -c "uv run uvicorn --host 0.0.0.0 --port 3000 app.asgi:app --reload"
+
+  db:
+    image: postgres:17
+    container_name: ${PROJECT_NAME}-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: ${PG_USER}
+      POSTGRES_PASSWORD: ${PG_PASSWORD}
+      POSTGRES_DB: ${PG_DB}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    ports:
+      - ${PG_PORT}:${PG_PORT}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      retries: 5
+      start_period: 5s
+      timeout: 3s
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: ${PROJECT_NAME}-rabbitmq
+    restart: always
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
+      RABBITMQ_DEFAULT_VHOST: ${RABBITMQ_VHOST}
+    ports:
+      - ${RABBITMQ_PORT}:5672
+      - ${RABBITMQ_MANAGEMENT_PORT}:15672
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "check_port_connectivity"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: ${PROJECT_NAME}-redis
+    restart: always
+    ports:
+      - ${REDIS_PORT}:6379
+    volumes:
+      - redis_data:/data
+    command: redis-server --requirepass ${REDIS_PASSWORD}
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  worker:
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+    container_name: ${PROJECT_NAME}-worker
+    restart: always
+    env_file:
+      - .env
+    depends_on:
+      api:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+    command: >
+      uv run python -m app.core.worker
+
+  migrator:
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+    container_name: ${PROJECT_NAME}-migrator
+    restart: on-failure
+    env_file:
+      - .env
+    volumes:
+      - ./src:/app/src
+      - ./alembic:/app/alembic
+      - ./alembic.ini:/app/alembic.ini
+      - ./.env:/app/.env
+    depends_on:
+      db:
+        condition: service_healthy
+    command: >
+      bash -c "cd /app && PYTHONPATH=/app/src uv run alembic upgrade head && cd src && uv run initial_seed.py"
+
+volumes:
+  pg_data:
+  rabbitmq_data:
+  redis_data:

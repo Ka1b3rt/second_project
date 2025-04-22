@@ -1,16 +1,60 @@
 [project]
-name = "second-project"
+name = "delivery-service"
 version = "0.1.0"
-description = "Delivery service"
-authors = [
-    {name = "ka1b3rt",email = "katbert13@gmail.com"}
-]
+description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "alembic>=1.15.1",
+    "asyncpg>=0.30.0",
+    "aio-pika>=9.5.5",
+    "fastapi>=0.115.12",
+    "httpx>=0.28.1",
+    "psycopg2>=2.9.10",
+    "pydantic-settings>=2.8.1",
+    "pytest-asyncio>=0.26.0",
+    "redis>=5.0.1",
+    "sqlalchemy>=2.0.39",
+    "uvicorn>=0.34.0",
 ]
 
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "black",
+    "ruff",
+    "mypy",
+]
 
-[build-system]
-requires = ["poetry-core>=2.0.0,<3.0.0"]
-build-backend = "poetry.core.masonry.api"
+[tool.black]
+line-length = 88
+target-version = ["py312"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.ruff.lint]
+select = ["E", "F", "B", "I"]  # E=pycodestyle, F=pyflakes, B=bugbear, I=import
+ignore = ["B008", "E501"]
+fixable = ["ALL"]
+unfixable = []
+
+[tool.ruff.lint.isort]
+known-first-party = ["main"]
+
+[tool.pytest.ini_options]
+pythonpath = "src"
+testpaths = "src/tests/test_*"
+asyncio_mode = "auto"
+markers = [
+    "api"
+]
+filterwarnings = [
+    "ignore::pydantic.PydanticDeprecatedSince20"
+]
+asyncio_default_fixture_loop_scope = "function"
